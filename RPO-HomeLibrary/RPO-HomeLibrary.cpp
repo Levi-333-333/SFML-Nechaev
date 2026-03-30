@@ -2,6 +2,11 @@
 #include <vector>
 #include <iostream>
 
+const sf::Color ROSY_GRANITE_COLOR = { 163, 149, 148 };
+const sf::Color EGGSHELL_COLOR = { 237, 235, 215 };
+const sf::Color CHARCOAL_BROWN_COLOR = { 66, 62, 55 };
+const sf::Color SUNFLOWER_GOLD_COLOR = { 227, 178, 60 };
+
 // ---------------Структура книги---------------
 struct Book
 {
@@ -94,13 +99,41 @@ private:
 	sf::String valueString;
 	bool isActive = false;
 	unsigned int maxLength = 32;
-
-	const sf::Color ROSY_GRANITE_COLOR = { 163, 149, 148 };
-	const sf::Color EGGSHELL_COLOR = { 237, 235, 215 };
-	const sf::Color CHARCOAL_BROWN_COLOR = { 66, 62, 55 };
-	const sf::Color SUNFLOWER_GOLD_COLOR = { 227, 178, 60 };
 };
 // ---------------Класс кнопки---------------
+class Button
+{
+public:
+	Button(const sf::Font& font, sf::String label, sf::Vector2f position, sf::Vector2f size) : label(font, label, 18)
+	{
+		buttonShape.setPosition(position);
+		buttonShape.setSize(size);
+		buttonShape.setFillColor(sf::Color(EGGSHELL_COLOR));
+		buttonShape.setOutlineColor(CHARCOAL_BROWN_COLOR);
+		buttonShape.setOutlineThickness(3.0f);
+
+		this->label.setFillColor(sf::Color(CHARCOAL_BROWN_COLOR));
+		this->label.setPosition({ position.x + 10.0f, position.y + 5.0f });
+	}
+
+	bool Contains(sf::Vector2f point) const
+	{
+		const sf::Vector2f position = buttonShape.getPosition();
+		const sf::Vector2f size = buttonShape.getSize();
+
+		return point.x >= position.x && point.x <= position.x + size.x && point.y >= position.y && point.y <= position.y + size.y;
+	}
+
+	void Draw(sf::RenderWindow& window)
+	{
+		window.draw(buttonShape);
+		window.draw(label);
+	}
+
+private:
+	sf::RectangleShape buttonShape;
+	sf::Text label;	
+};
 
 int main()
 {
@@ -111,11 +144,65 @@ int main()
 	const unsigned int WINDOW_WIDTH = 800;
 	const unsigned int WINDOW_HEIGHT = 600;
 	sf::RenderWindow mainWindow(sf::VideoMode({WINDOW_WIDTH, WINDOW_HEIGHT}), L"Домашняя библиотека");
+	// Добавление иконки
+	sf::Image icon("icon.png");
+	mainWindow.setIcon(icon);
 
 	// ---------------Создание объектов---------------
-													// Размер по x - количество букв * 10
+	sf::RectangleShape leftPanel({ 350.0f, 565.0f });
+	leftPanel.setPosition({ 15.0f, 15.0f });
+	leftPanel.setFillColor(sf::Color(ROSY_GRANITE_COLOR));
+	leftPanel.setOutlineColor(sf::Color(CHARCOAL_BROWN_COLOR));
+	leftPanel.setOutlineThickness(5.0f);
+
+	sf::RectangleShape rightPanel({ 350.0f, 565.0f });
+	rightPanel.setPosition({ 430.0f, 15.0f });
+	rightPanel.setFillColor(sf::Color(ROSY_GRANITE_COLOR));
+	rightPanel.setOutlineColor(sf::Color(CHARCOAL_BROWN_COLOR));
+	rightPanel.setOutlineThickness(5.0f);
+
+	sf::Text statusText(font, "", 18);
+	statusText.setFillColor(sf::Color(CHARCOAL_BROWN_COLOR));
+	statusText.setPosition({ 90.0f, 540.0f });
+	// Объекты для статуса добавления книги
+	sf::String statusMessage;
+	bool showStatus = false;
+	sf::Clock statusClock;
+
+	auto SetStatus = [&](sf::String& message)
+		{
+			statusMessage = message;
+			showStatus = true;
+			statusClock.restart();
+		};
+
+	std::vector<Book> booksArray;
+
+	// Размер по x - количество букв * 10
 													// Размер по y - размер символа * 2
-	InputField bookTitle(font, L"Название книги", {100.0f, 100.0f}, { 320.0f, 36.f });
+	InputField bookTitleField(font, L"Название книги", { 20.0f, 100.0f }, { 320.0f, 36.f });
+	InputField authorField(font, L"Автор книги", { 20.0f, 200.0f }, { 320.0f, 36.f });
+	InputField yearField(font, L"Год издания", { 20.0f, 300.0f }, { 320.0f, 36.f });
+
+	auto AddBook = [&]()
+		{
+			if (bookTitleField.GetValue().isEmpty() || authorField.GetValue().isEmpty() || yearField.GetValue().isEmpty())
+			{
+				sf::String message(L"Не все поля заполнены!");
+				SetStatus(message);
+				return;
+			}
+
+			booksArray.push_back(Book{ bookTitleField.GetValue(), authorField.GetValue(), yearField.GetValue() });
+
+			bookTitleField.ClearInputValue();
+			yearField.ClearInputValue();
+			authorField.ClearInputValue();
+			sf::String message(L"Книга успешно добавлена!");
+			SetStatus(message);
+		};													
+
+	Button addBookButton(font, L"Добавить книгу", { 90.0f, 500.0f }, { 200.0f, 26.0f });
 
 	// ---------------Обработка событий---------------
 	while (mainWindow.isOpen())
@@ -132,29 +219,105 @@ int main()
 			{
 				if (mouseEvent->button == sf::Mouse::Button::Left)
 				{
+					// Создание объекта вектора, показывающего координаты нажатия курсора мыши
 					sf::Vector2f mousePoint = { float(mouseEvent->position.x), float(mouseEvent->position.y) };
 
-					if (bookTitle.Contains(mousePoint))
+					// Если клик мыши находится в каком-либо из графических объектов на экране, активируем эти объекты
+					if (bookTitleField.Contains(mousePoint))
 					{
-						bookTitle.SetActive(true);
+						bookTitleField.SetActive(true);
+						authorField.SetActive(false);
+						yearField.SetActive(false);
+					}
+					else if (authorField.Contains(mousePoint))
+					{
+						authorField.SetActive(true);
+						bookTitleField.SetActive(false);
+						yearField.SetActive(false);
+					}
+					else if (yearField.Contains(mousePoint))
+					{
+						yearField.SetActive(true);
+						bookTitleField.SetActive(false);
+						authorField.SetActive(false);
 					}
 					else
 					{
-						bookTitle.SetActive(false);
+						bookTitleField.SetActive(false);
+						authorField.SetActive(false);
+						yearField.SetActive(false);
+					}
+					// Обработка нажатия на кнопку
+					if (addBookButton.Contains(mousePoint))
+					{
+						AddBook();
 					}
 				}
 			}
 			// Обработка события печатания
 			else if (const auto* textEntered = event->getIf<sf::Event::TextEntered>())
 			{
-				bookTitle.HandleTextEntered(textEntered->unicode);
+				bookTitleField.HandleTextEntered(textEntered->unicode);
+				authorField.HandleTextEntered(textEntered->unicode);
+				yearField.HandleTextEntered(textEntered->unicode);
 			}
 		}
+		// Очистка текста статуса
+		if (showStatus && statusClock.getElapsedTime().asSeconds() > 2.0f) showStatus = false;
+		
 		// ---------------Очистка элементов---------------
 		mainWindow.clear(sf::Color(227, 178, 60));
 
 		// ---------------Отрисовка элементов---------------
-		bookTitle.Draw(mainWindow);
+		mainWindow.draw(leftPanel);
+		mainWindow.draw(rightPanel);
+		authorField.Draw(mainWindow);
+		yearField.Draw(mainWindow);
+		bookTitleField.Draw(mainWindow);
+		addBookButton.Draw(mainWindow);
+
+		// Если статус добавления книги есть, то отрисовываем его
+		if (showStatus)
+		{
+			statusText.setString(statusMessage);
+			mainWindow.draw(statusText);
+		}
+
+		// Создаем объект текста для вывода количества книг
+		sf::Text bookCountText(font, "", 18);
+		bookCountText.setFillColor(sf::Color(CHARCOAL_BROWN_COLOR));
+		bookCountText.setString(sf::String(L"Всего книг: ") + sf::String(std::to_string(booksArray.size())));
+		bookCountText.setPosition({ 440.0f, 30.0f });
+		mainWindow.draw(bookCountText);
+
+		// Если массив книг пуст, то создаем текст один, в другом случае - другой
+		if (booksArray.empty())
+		{
+			sf::Text emptyText(font, L"Библиотека пуста", 18);
+			emptyText.setFillColor(sf::Color(CHARCOAL_BROWN_COLOR));
+			emptyText.setPosition({ 440.0f, 60.0f });
+			mainWindow.draw(emptyText);
+		}
+		else
+		{
+			float y = 60.0f;
+			// Перечисляем все библиотеки из массива и создаем под каждую из них свой объект текста
+			for (int i = 0; i < booksArray.size(); ++i)
+			{
+				const Book& book = booksArray[i];
+				// Формат вывода книги: 1. Название / автор. - год
+				sf::String bookInfo = sf::String(std::to_string(i + 1)) + ". " + book.title + " / " + book.author + ". - " + book.year;
+				sf::Text bookLine(font, bookInfo, 18);
+				bookLine.setFillColor(sf::Color(CHARCOAL_BROWN_COLOR));
+				bookLine.setPosition({ 440.0f,  y });
+				mainWindow.draw(bookLine);
+
+				y += 25.0f;
+			}
+		}
+
 		mainWindow.display();
 	}	
+
+	return 0;
 }
