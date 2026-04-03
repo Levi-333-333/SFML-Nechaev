@@ -100,6 +100,7 @@ private:
 	bool isActive = false;
 	unsigned int maxLength = 32;
 };
+
 // ---------------Класс кнопки---------------
 class Button
 {
@@ -135,11 +136,118 @@ private:
 	sf::Text label;	
 };
 
+// ---------------Класс анимации---------------
+class Animation // У анимации есть: несколько текстур (кадров), текущий кадр, скорость смены кадров, общая длительность (используется для условия проигрывания анимации), таймеры
+{
+public:
+	Animation() {}
+	Animation(int currentFrame, float frameDelay, float totalDuration)
+	{
+		this->currentFrame = currentFrame;
+		this->frameDelay = frameDelay;
+		this->totalDuration = totalDuration;
+	}
+
+	// Функция по загрузке файлов кадров, принимающая массив строк, ссылающихся на пути до кадров
+	bool LoadFrames(const std::vector<std::string>& filePaths)
+	{
+		// Первым делом имеющиеся загруженные кадры в объект очищаются, для того чтобы можно было повторно использовать объект класса Animation. Это выгоднее чем создание полностью нового объекта, потому что не выделяется новая память под объект.
+		frames.clear();
+		// После полной очистки массива становится неизвестно количество объектов. Для этого заранее резервируем память под количество поступающих объектов в параметр функции.
+		frames.reserve(filePaths.size());
+
+		for (const std::string& filePath : filePaths)
+		{
+			// Создаем объект умного указателя на текстуру
+			std::shared_ptr<sf::Texture> texture = std::make_shared<sf::Texture>();
+			// Пытаемся загрузить в объект текстуры файл
+			if (!texture->loadFromFile(filePath))
+			{
+				std::cerr << "Файл текстуры не найден: " << filePath << std::endl;
+				return false;
+			}
+			frames.push_back(texture);
+		}
+
+		return !frames.empty();
+	}
+
+	bool GetIsActive() const
+	{
+		return isActive;
+	}
+
+	// Функция, выставляющая значения в изначальное положение
+	void StartAnimation()
+	{
+		isActive = true;
+		frameClock.restart();
+		totalClock.restart();
+		currentFrame = 0;
+	}	
+
+	// Функция, производящая продвижение по кадрам
+	bool UpdateAnimation()
+	{
+		// Если анимация не активна, то возвращаем false
+		if (!isActive) return false;
+
+		// Опиарясь на таймер смены кадра, если он становится больше, чем время задержки (скорости смены кадра), то прибавляем к текущему кадру + 1
+		if (frameClock.getElapsedTime().asSeconds() > frameDelay)
+		{
+			// При простом увеличении кадра рано или поздно появится ситуация, при которой значение текущего кадра станет больше, чем общее кол-во кадров. Необходимо это разрешить. Это можно сделать благодаря нахождению процента от общего количества кадров
+			currentFrame = (++currentFrame) % frames.size(); // Благодаря делению с остатком текущий кадр не уйдет в большее значение, чем количество элементов в массиве
+			frameClock.restart();
+		}
+
+		// определяем когда заканчивается анимация и выставляем значение isActive = false
+		// если время анимации подошло к концу, то значит она верно отработала
+		if (totalClock.getElapsedTime().asSeconds() > totalDuration)
+		{
+			isActive = false;
+			return true;
+		}
+
+		return false;
+	}
+
+	// Функция отрисовки анимации в графическое окно
+	void Draw(sf::RenderWindow& window)
+	{
+		if (!isActive) return;
+
+		// Создаем объект спрайта и помещаем в него текстуру из массива кадров, обращаясь по индексу текущего кадра
+		sf::Sprite frameSprite(*frames[currentFrame]);
+		frameSprite.setScale({ 1.0f, 1.0f });
+		frameSprite.setPosition({500.0f, 260.0f});
+
+		window.draw(frameSprite);
+	}
+private:
+	std::vector<std::shared_ptr<sf::Texture>> frames; // массив умных указателей на текстуры
+	int currentFrame = 0;
+	bool isActive = false;
+	float frameDelay = 0.1f; // скорость смены (задержки) кадров
+	float totalDuration = 100.4f;
+	sf::Clock frameClock; // таймер смены кадра
+	sf::Clock totalClock; // таймер учета всего прошедшенго времени
+};
+
 int main()
 {
 	// ---------------Загрузка ресурсов---------------
 	sf::Font font("Comic Sans MS.ttf");
 	sf::Texture bookTexture("book1.png");
+	Animation loadingAnimation;
+	// В моем проекте кадры анимации загрузки находятся в папке animations в корне проекта
+	loadingAnimation.LoadFrames({
+		"animations\\1.png",
+		"animations\\2.png",
+		"animations\\3.png",
+		"animations\\4.png",
+		"animations\\5.png",
+		"animations\\6.png",
+		});
 
 	// ---------------Инициализация основного окна---------------
 	const unsigned int WINDOW_WIDTH = 800;
@@ -196,12 +304,15 @@ int main()
 				return;
 			}
 
+			// Только тогда, когда все время, отведенное на анимацию, завершится, мы добавляем книгу в массив для отрисовки на экране
 			booksArray.push_back(Book{ bookTitleField.GetValue(), authorField.GetValue(), yearField.GetValue() });
 
 			bookTitleField.ClearInputValue();
 			yearField.ClearInputValue();
 			authorField.ClearInputValue();
-			sf::String message(L"Книга успешно добавлена!");
+
+			loadingAnimation.StartAnimation();
+			sf::String message(L"Добавление книги...");
 			SetStatus(message);
 		};													
 
@@ -217,54 +328,65 @@ int main()
 			{
 				mainWindow.close();
 			}
-			// дополнительная обработка события нахождения мыши в пределах окна и нажатия. getIF - вспомогательная функция, определяющая наличие события с дополнительным уссловием
-			else if (const auto* mouseEvent = event->getIf<sf::Event::MouseButtonPressed>())
+			// ИЗМЕНЕНО: пользователь может взаимодействовать с программой только если анимация загрузки книги в библиотеку не активна!
+			else if (!loadingAnimation.GetIsActive())
 			{
-				if (mouseEvent->button == sf::Mouse::Button::Left)
+				// дополнительная обработка события нахождения мыши в пределах окна и нажатия. getIF - вспомогательная функция, определяющая наличие события с дополнительным уссловием
+				if (const auto* mouseEvent = event->getIf<sf::Event::MouseButtonPressed>())
 				{
-					// Создание объекта вектора, показывающего координаты нажатия курсора мыши
-					sf::Vector2f mousePoint = { float(mouseEvent->position.x), float(mouseEvent->position.y) };
+					if (mouseEvent->button == sf::Mouse::Button::Left)
+					{
+						// Создание объекта вектора, показывающего координаты нажатия курсора мыши
+						sf::Vector2f mousePoint = { float(mouseEvent->position.x), float(mouseEvent->position.y) };
 
-					// Если клик мыши находится в каком-либо из графических объектов на экране, активируем эти объекты
-					if (bookTitleField.Contains(mousePoint))
-					{
-						bookTitleField.SetActive(true);
-						authorField.SetActive(false);
-						yearField.SetActive(false);
-					}
-					else if (authorField.Contains(mousePoint))
-					{
-						authorField.SetActive(true);
-						bookTitleField.SetActive(false);
-						yearField.SetActive(false);
-					}
-					else if (yearField.Contains(mousePoint))
-					{
-						yearField.SetActive(true);
-						bookTitleField.SetActive(false);
-						authorField.SetActive(false);
-					}
-					else
-					{
-						bookTitleField.SetActive(false);
-						authorField.SetActive(false);
-						yearField.SetActive(false);
-					}
-					// Обработка нажатия на кнопку
-					if (addBookButton.Contains(mousePoint))
-					{
-						AddBook();
+						// Если клик мыши находится в каком-либо из графических объектов на экране, активируем эти объекты
+						if (bookTitleField.Contains(mousePoint))
+						{
+							bookTitleField.SetActive(true);
+							authorField.SetActive(false);
+							yearField.SetActive(false);
+						}
+						else if (authorField.Contains(mousePoint))
+						{
+							authorField.SetActive(true);
+							bookTitleField.SetActive(false);
+							yearField.SetActive(false);
+						}
+						else if (yearField.Contains(mousePoint))
+						{
+							yearField.SetActive(true);
+							bookTitleField.SetActive(false);
+							authorField.SetActive(false);
+						}
+						else
+						{
+							bookTitleField.SetActive(false);
+							authorField.SetActive(false);
+							yearField.SetActive(false);
+						}
+						// Обработка нажатия на кнопку
+						if (addBookButton.Contains(mousePoint))
+						{
+							AddBook();
+						}
 					}
 				}
-			}
-			// Обработка события печатания
-			else if (const auto* textEntered = event->getIf<sf::Event::TextEntered>())
-			{
-				bookTitleField.HandleTextEntered(textEntered->unicode);
-				authorField.HandleTextEntered(textEntered->unicode);
-				yearField.HandleTextEntered(textEntered->unicode);
+				// Обработка события печатания
+				else if (const auto* textEntered = event->getIf<sf::Event::TextEntered>())
+				{
+					bookTitleField.HandleTextEntered(textEntered->unicode);
+					authorField.HandleTextEntered(textEntered->unicode);
+					yearField.HandleTextEntered(textEntered->unicode);
+				}
 			}
 		}
+
+		if (loadingAnimation.UpdateAnimation())
+		{
+			sf::String message(L"Книга успешно добавлена!");
+			SetStatus(message);
+		}
+
 		// Очистка текста статуса
 		if (showStatus && statusClock.getElapsedTime().asSeconds() > 2.0f) showStatus = false;
 		
@@ -326,7 +448,7 @@ int main()
 				y += 50.0f;
 			}
 		}
-
+		loadingAnimation.Draw(mainWindow);
 		mainWindow.display();
 	}	
 
