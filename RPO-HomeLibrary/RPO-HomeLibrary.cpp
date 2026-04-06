@@ -131,8 +131,8 @@ public:
 		window.draw(label);
 	}
 
-private:
 	sf::RectangleShape buttonShape;
+private:
 	sf::Text label;	
 };
 
@@ -228,7 +228,7 @@ private:
 	int currentFrame = 0;
 	bool isActive = false;
 	float frameDelay = 0.1f; // скорость смены (задержки) кадров
-	float totalDuration = 100.4f;
+	float totalDuration = 1.4f;
 	sf::Clock frameClock; // таймер смены кадра
 	sf::Clock totalClock; // таймер учета всего прошедшенго времени
 };
@@ -252,7 +252,7 @@ int main()
 	// ---------------Инициализация основного окна---------------
 	const unsigned int WINDOW_WIDTH = 800;
 	const unsigned int WINDOW_HEIGHT = 600;
-	sf::RenderWindow mainWindow(sf::VideoMode({WINDOW_WIDTH, WINDOW_HEIGHT}), L"Домашняя библиотека");
+	sf::RenderWindow mainWindow(sf::VideoMode({WINDOW_WIDTH, WINDOW_HEIGHT}), L"Домашняя библиотека", sf::Style::Close);
 	// Добавление иконки
 	sf::Image icon("icon.png");
 	mainWindow.setIcon(icon);
@@ -314,9 +314,27 @@ int main()
 			loadingAnimation.StartAnimation();
 			sf::String message(L"Добавление книги...");
 			SetStatus(message);
-		};													
+		};				
+
+	auto OpenBook = [&]()
+	{
+		sf::RenderWindow bookWindow(sf::VideoMode({ 400, 200 }), L"Карточка книги", sf::Style::Close);
+		while (mainWindow.isOpen())
+		{
+			while (const std::optional event = bookWindow.pollEvent())
+			{
+				if (event->is<sf::Event::Closed>())
+				{
+					bookWindow.close();
+				}
+			}
+		}		
+		bookWindow.clear(sf::Color(SUNFLOWER_GOLD_COLOR));
+		bookWindow.display();
+	};
 
 	Button addBookButton(font, L"Добавить книгу", { 90.0f, 500.0f }, { 200.0f, 26.0f });
+	Button openBookButton = { font, L"Открыть", {680.0f, 60.0f}, {90, 30} };
 
 	// ---------------Обработка событий---------------
 	while (mainWindow.isOpen())
@@ -368,6 +386,10 @@ int main()
 						if (addBookButton.Contains(mousePoint))
 						{
 							AddBook();
+						}
+						else if (openBookButton.Contains(mousePoint))
+						{
+							OpenBook();
 						}
 					}
 				}
@@ -425,27 +447,31 @@ int main()
 		}
 		else
 		{
-			float y = 60.0f;
 			// Перечисляем все библиотеки из массива и создаем под каждую из них свой объект текста
+			float bookFieldY = 60.0f;
 			for (int i = 0; i < booksArray.size(); ++i)
 			{
 				const Book& book = booksArray[i];
 				// Формат вывода книги: 1. Название / автор. - год
-				sf::String bookInfo = sf::String(std::to_string(i + 1)) + ". " + book.title + " / " + book.author + ". \n- " + book.year;
+				//sf::String bookInfo = sf::String(std::to_string(i + 1)) + ". " + book.title + " / " + book.author + ". \n- " + book.year;👿
+				sf::String bookInfo = sf::String(std::to_string(i + 1)) + ". " + book.title;
 
 				// Отрисовка спрайта в программе.
 				// По аналогии с отрисовкой текста в графическом приложении, где есть два вида классов Text и String, у отрисовки пользовательской (своей) графики есть класс Texture, отвечающий за содержимое изображения, и класс Sprite, отвечающий за рендер или отрисовку в графическом окне.
 				sf::Sprite bookSprite(bookTexture);
 				bookSprite.setScale({ 0.01f, 0.01f });
-				bookSprite.setPosition({ 430.0f, y });
+				bookSprite.setPosition({ 430.0f, bookFieldY });
 				mainWindow.draw(bookSprite);
 
 				sf::Text bookLine(font, bookInfo, 18);
 				bookLine.setFillColor(sf::Color(CHARCOAL_BROWN_COLOR));
-				bookLine.setPosition({ 480.0f,  y });
+				bookLine.setPosition({ 480.0f,  bookFieldY });
+
+				openBookButton.buttonShape.setPosition({ 680.0f, bookFieldY });
+				openBookButton.Draw(mainWindow);
 				mainWindow.draw(bookLine);
 
-				y += 50.0f;
+				bookFieldY += 50.0f;
 			}
 		}
 		loadingAnimation.Draw(mainWindow);
