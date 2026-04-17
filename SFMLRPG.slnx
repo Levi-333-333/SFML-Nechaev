@@ -4,5 +4,4 @@
     <Platform Name="x86" />
   </Configurations>
   <Project Path="RPO-HomeLibrary/RPO-HomeLibrary.vcxproj" Id="3fc38a7c-bafc-4d65-8f77-b50380010d02" />
-  <Project Path="SFMLRPG/SFMLRPG.vcxproj" Id="5828ca5a-497b-442a-9511-47dc4cf73d27" />
 </Solution>
